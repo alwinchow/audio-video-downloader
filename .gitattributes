@@ -1,0 +1,4 @@
+# startup.sh runs on Azure's Linux container — it must stay LF, even if
+# edited on Windows, or the #!/usr/bin/env bash shebang breaks.
+startup.sh text eol=lf
+*.sh text eol=lf

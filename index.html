@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio &amp; Video Downloader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #ff0000; --bg: #f4f7f6; --card: #ffffff; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif; background-color: var(--bg);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; margin: 0; padding: 1rem;
+        }
+        .container {
+            background: var(--card); padding: 2rem; border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 420px; max-width: 100%;
+            text-align: center;
+        }
+        h1 { color: #333; margin-bottom: .5rem; font-size: 1.5rem; }
+        p.sub { color: #666; font-size: .9rem; margin-bottom: 1.5rem; }
+        input[type="text"], input[type="password"], select {
+            width: 100%; padding: 12px; margin-bottom: 1rem; border: 2px solid #eee;
+            border-radius: 10px; outline: none; transition: border .3s; font-size: 1rem;
+            font-family: inherit; background: #fff;
+        }
+        input:focus, select:focus { border-color: var(--primary); }
+        button {
+            width: 100%; padding: 12px; background-color: var(--primary); color: #fff;
+            border: none; border-radius: 10px; font-weight: 600; cursor: pointer;
+            transition: transform .2s, background .3s; font-size: 1rem;
+        }
+        button:hover { background-color: #cc0000; }
+        button:active { transform: scale(.98); }
+        button:disabled { background: #f3a6a6; cursor: default; }
+        button.mini {
+            width: auto; padding: 7px 12px; font-size: .8rem; font-weight: 600;
+            background: #eef1f0; color: #444;
+        }
+        button.mini:hover { background: #e2e6e5; }
+        #status { margin-top: 1.25rem; font-size: .9rem; min-height: 1.2rem; }
+        #progressWrap { display: none; margin-top: 1rem; text-align: left; }
+        .bar {
+            height: 10px; background: #e6eae9; border-radius: 5px; overflow: hidden;
+        }
+        .bar > i {
+            display: block; height: 100%; width: 0%; background: var(--primary);
+            border-radius: 5px; transition: width .25s ease;
+        }
+        .bar.indeterminate > i {
+            width: 35%; animation: slide 1.1s ease-in-out infinite;
+        }
+        @keyframes slide {
+            0% { margin-left: -35%; } 100% { margin-left: 100%; }
+        }
+        #progressText {
+            display: flex; justify-content: space-between; gap: 8px;
+            font-size: .78rem; color: #777; margin-top: 5px;
+        }
+        #progressText b { color: #333; font-variant-numeric: tabular-nums; }
+        .tabs {
+            display: flex; gap: 6px; background: #f0f3f2; padding: 4px;
+            border-radius: 12px; margin-bottom: 1.25rem;
+        }
+        .tabs button {
+            background: transparent; color: #777; padding: 9px 6px;
+            font-size: .9rem; border-radius: 9px;
+        }
+        .tabs button:hover { background: rgba(255,255,255,.65); color: #444; }
+        .tabs button.active {
+            background: #fff; color: #222; box-shadow: 0 1px 3px rgba(0,0,0,.13);
+        }
+        .tabs button.active:hover { background: #fff; }
+        .success-link {
+            display: inline-block; margin-top: 10px; color: #27ae60;
+            text-decoration: none; font-weight: bold;
+        }
+        .loader {
+            display: none; margin: 12px auto; border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary); border-radius: 50%;
+            width: 30px; height: 30px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #preview, #vidPreview { display: none; margin: .5rem 0 1rem; text-align: left; }
+        #preview img, #vidPreview img { width: 100%; border-radius: 10px; margin-bottom: .5rem; }
+        #preview .title, #vidPreview .title { font-weight: 600; color: #333; font-size: .95rem; }
+        #preview .meta, #vidPreview .meta { color: #888; font-size: .8rem; margin-top: 2px; }
+        .hidden { display: none !important; }
+        label.small { display:block; text-align:left; font-size:.8rem; color:#888; margin-bottom:4px; }
+
+        /* Preview player + trim controls */
+        #trimmer, #vidTrimmer { text-align: left; margin-bottom: 1rem; }
+        #player { width: 100%; margin-bottom: .75rem; }
+        #vidPlayer {
+            width: 100%; max-height: 240px; background: #000;
+            border-radius: 10px; margin-bottom: .75rem; display: block;
+        }
+        #trimmer.busy, #vidTrimmer.busy { opacity: .45; pointer-events: none; }
+        .trim-head {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: .8rem; color: #888; margin-bottom: 6px; gap: 8px;
+        }
+        .trim-head span { display: flex; align-items: center; gap: 6px; }
+        input.timebox {
+            width: 86px; padding: 6px 8px; margin: 0; text-align: center;
+            font-size: .9rem; font-weight: 600; color: #333;
+            font-variant-numeric: tabular-nums; border: 2px solid #eee;
+            border-radius: 8px; font-family: inherit; background: #fff;
+        }
+        input.timebox:focus { border-color: var(--primary); }
+        input.timebox.bad { border-color: #e08; background: #fff5f9; }
+
+        /* One slider, two handles: the inputs sit on top of a shared track. */
+        .dual { position: relative; height: 34px; margin-bottom: .25rem; }
+        .dual .track, .dual .fill {
+            position: absolute; top: 50%; height: 6px; margin-top: -3px; border-radius: 3px;
+        }
+        .dual .track { left: 0; right: 0; background: #e6eae9; }
+        .dual .fill { background: var(--primary); }
+        .dual .playhead {
+            position: absolute; top: 7px; width: 2px; height: 20px; background: #333;
+            border-radius: 1px; display: none;
+        }
+        .dual input[type="range"] {
+            position: absolute; left: 0; top: 0; width: 100%; height: 34px; margin: 0;
+            background: none; border: none; padding: 0; -webkit-appearance: none;
+            appearance: none; pointer-events: none;   /* only the handles grab */
+        }
+        .dual input[type="range"]:focus { outline: none; }
+        .dual input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; pointer-events: auto; cursor: grab;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: #fff; border: 3px solid var(--primary);
+            box-shadow: 0 1px 4px rgba(0,0,0,.28);
+        }
+        .dual input[type="range"]::-moz-range-thumb {
+            pointer-events: auto; cursor: grab;
+            width: 16px; height: 16px; border-radius: 50%;
+            background: #fff; border: 3px solid var(--primary);
+            box-shadow: 0 1px 4px rgba(0,0,0,.28);
+        }
+        .dual input[type="range"]::-moz-range-track { background: none; border: none; }
+        .trim-actions { display: flex; gap: 8px; margin: .5rem 0 .25rem; }
+        .trim-actions button { flex: 1; }
+        .sel {
+            background: #f7faf9; border: 1px solid #eceeed; border-radius: 10px;
+            padding: 8px 10px; font-size: .82rem; color: #555; margin-bottom: .25rem;
+        }
+        .sel b { color: #333; font-variant-numeric: tabular-nums; }
+
+        /* YouTube sign-in (cookies) */
+        #signin {
+            margin-top: 1.5rem; border-top: 1px solid #eceeed; padding-top: .9rem;
+            text-align: left;
+        }
+        #signin summary {
+            cursor: pointer; font-size: .82rem; color: #888; font-weight: 600;
+            list-style: none;
+        }
+        #signin summary::-webkit-details-marker { display: none; }
+        #signin summary::before { content: '▸ '; }
+        #signin[open] summary::before { content: '▾ '; }
+        #signin summary:hover { color: #555; }
+        .signin-body { padding-top: .7rem; }
+        .cookie-state {
+            font-size: .82rem; padding: 8px 10px; border-radius: 9px;
+            background: #f7faf9; border: 1px solid #eceeed; color: #555;
+            margin-bottom: .6rem;
+        }
+        .cookie-state.ok   { background: #f1f9f4; border-color: #cce9d8; color: #22694191; }
+        .cookie-state.ok   { color: #226941; }
+        .cookie-state.warn { background: #fff6f6; border-color: #f2d6d6; color: #a33; }
+        #dropZone {
+            border: 2px dashed #d9dedd; border-radius: 10px; padding: 16px 12px;
+            text-align: center; cursor: pointer; transition: border .2s, background .2s;
+            background: #fcfdfd;
+        }
+        #dropZone:hover, #dropZone.over { border-color: var(--primary); background: #fff7f7; }
+        #dropZone b { display: block; font-size: .85rem; color: #444; }
+        #dropZone span { font-size: .76rem; color: #999; }
+        .hint {
+            font-size: .74rem; color: #999; line-height: 1.5; margin: .6rem 0 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎵 Audio &amp; Video Downloader</h1>
+    <p class="sub">Enter your access code, pick a tab, and paste a YouTube link.</p>
+
+    <label class="small" for="codeInput">Access code</label>
+    <input type="password" id="codeInput" placeholder="Access code" autocomplete="current-password">
+
+    <div class="tabs">
+        <button id="tabAudio" class="active" type="button">🎵 Audio</button>
+        <button id="tabVideo" type="button">🎬 Video</button>
+    </div>
+
+    <div id="panelAudio">
+
+    <label class="small" for="urlInput">YouTube link</label>
+    <input type="text" id="urlInput" placeholder="https://youtube.com/..." autocomplete="off">
+
+    <button id="fetchBtn">Get preview</button>
+
+    <div id="preview">
+        <img id="thumb" alt="">
+        <div class="title" id="vTitle"></div>
+        <div class="meta" id="vMeta"></div>
+    </div>
+
+    <div id="trimmer" class="hidden">
+        <audio id="player" controls preload="metadata"></audio>
+
+        <div class="trim-head">
+            <span>Start <input type="text" class="timebox" id="startInput"
+                              value="0:00" inputmode="numeric" aria-label="Start time"></span>
+            <span>End <input type="text" class="timebox" id="endInput"
+                            value="0:00" inputmode="numeric" aria-label="End time"></span>
+        </div>
+        <div class="dual" id="dual">
+            <div class="track"></div>
+            <div class="fill" id="fill"></div>
+            <div class="playhead" id="playhead"></div>
+            <input type="range" id="startRange" min="0" max="100" step="0.1" value="0" aria-label="Start">
+            <input type="range" id="endRange" min="0" max="100" step="0.1" value="100" aria-label="End">
+        </div>
+
+        <div class="trim-actions">
+            <button class="mini" id="setStartBtn" type="button">Start here</button>
+            <button class="mini" id="setEndBtn" type="button">End here</button>
+        </div>
+        <div class="trim-actions">
+            <button class="mini" id="playSelBtn" type="button">▶ Play selection</button>
+            <button class="mini" id="resetSelBtn" type="button">Reset to full</button>
+        </div>
+
+        <div class="sel">
+            Selected: <b id="selLabel">0:00</b> of <b id="totalLabel">0:00</b> total
+            — you'll download this part only.<br>
+            Drag the handles, or type times like <b>1:30</b> or <b>1:02:45</b>.<br>
+            Preview is low-quality for speed; your download uses the quality you pick below.
+        </div>
+    </div>
+
+    <div id="chooser" class="hidden">
+        <label class="small" for="qualitySelect">Quality</label>
+        <select id="qualitySelect"></select>
+        <button id="downloadBtn">Download selection</button>
+    </div>
+
+    </div><!-- /panelAudio -->
+
+    <div id="panelVideo" class="hidden">
+        <label class="small" for="vidUrlInput">YouTube link</label>
+        <input type="text" id="vidUrlInput" placeholder="https://youtube.com/..." autocomplete="off">
+
+        <button id="vidFetchBtn">Get quality options</button>
+
+        <div id="vidPreview">
+            <img id="vidThumb" alt="">
+            <div class="title" id="vidTitle"></div>
+            <div class="meta" id="vidMeta"></div>
+        </div>
+
+        <div id="vidTrimmer" class="hidden">
+            <video id="vidPlayer" controls preload="metadata" playsinline></video>
+
+            <div class="trim-head">
+                <span>Start <input type="text" class="timebox" id="vidStartInput"
+                                   value="0:00" inputmode="numeric" aria-label="Start time"></span>
+                <span>End <input type="text" class="timebox" id="vidEndInput"
+                                 value="0:00" inputmode="numeric" aria-label="End time"></span>
+            </div>
+            <div class="dual" id="vidDual">
+                <div class="track"></div>
+                <div class="fill" id="vidFill"></div>
+                <div class="playhead" id="vidPlayhead"></div>
+                <input type="range" id="vidStartRange" min="0" max="100" step="0.1" value="0" aria-label="Start">
+                <input type="range" id="vidEndRange" min="0" max="100" step="0.1" value="100" aria-label="End">
+            </div>
+
+            <div class="trim-actions">
+                <button class="mini" id="vidSetStartBtn" type="button">Start here</button>
+                <button class="mini" id="vidSetEndBtn" type="button">End here</button>
+            </div>
+            <div class="trim-actions">
+                <button class="mini" id="vidPlaySelBtn" type="button">▶ Play selection</button>
+                <button class="mini" id="vidResetSelBtn" type="button">Reset to full</button>
+            </div>
+
+            <div class="sel">
+                Selected: <b id="vidSelLabel">0:00</b> of <b id="vidTotalLabel">0:00</b> total
+                — you'll download this part only.<br>
+                Preview is low-resolution for speed; your download uses the resolution you pick below.
+            </div>
+        </div>
+
+        <div id="vidChooser" class="hidden">
+            <label class="small" for="vidQualitySelect">Resolution</label>
+            <select id="vidQualitySelect"></select>
+            <button id="vidDownloadBtn">Download selection</button>
+        </div>
+    </div><!-- /panelVideo -->
+
+    <div class="loader" id="loader"></div>
+
+    <div id="progressWrap">
+        <div class="bar" id="progressBar"><i id="progressFill"></i></div>
+        <div id="progressText">
+            <span id="progressStage">Starting…</span>
+            <span id="progressDetail"></span>
+        </div>
+    </div>
+
+    <div id="status"></div>
+
+    <details id="signin">
+        <summary>YouTube sign-in</summary>
+        <div class="signin-body">
+            <div id="proxyState" class="cookie-state"></div>
+            <div id="cookieState" class="cookie-state">Checking…</div>
+            <div id="dropZone">
+                <b>Drop your cookies.txt here</b>
+                <span>or click to choose a file</span>
+                <input type="file" id="cookieFile" accept=".txt,text/plain" hidden>
+            </div>
+            <div class="trim-actions">
+                <button class="mini" id="cookieTestBtn" type="button">Test sign-in</button>
+                <button class="mini" id="cookieClearBtn" type="button">Remove</button>
+            </div>
+            <p class="hint">
+                YouTube blocks servers it doesn't recognise, so this one needs a
+                signed-in session. Export cookies for <b>youtube.com</b> in Netscape
+                format with a "Get cookies.txt" browser extension, then drop the file
+                here. Use a throwaway Google account — the server acts as that account,
+                and cookies are full account access. They expire after a few weeks;
+                when downloads start failing, drop in a fresh file.
+            </p>
+        </div>
+    </details>
+</div>
+
+<script>
+    const $ = (id) => document.getElementById(id);
+    const codeInput = $('codeInput'), urlInput = $('urlInput');
+    const fetchBtn = $('fetchBtn'), downloadBtn = $('downloadBtn');
+    const chooser = $('chooser'), qualitySelect = $('qualitySelect');
+    const preview = $('preview'), status = $('status'), loader = $('loader');
+    const trimmer = $('trimmer'), player = $('player');
+    const startRange = $('startRange'), endRange = $('endRange');
+    const startInput = $('startInput'), endInput = $('endInput');
+
+    // State for the currently prepared audio.
+    let prepared = null;   // { id, duration }
+    let stopAt = null;     // pause target while previewing a selection
+
+    // Remember the access code so family don't retype it.
+    codeInput.value = localStorage.getItem('dl_code') || '';
+    codeInput.addEventListener('change', () => localStorage.setItem('dl_code', codeInput.value));
+
+    function fmtDuration(s) {
+        if (!s && s !== 0) return '';
+        s = Math.max(0, Math.round(s));
+        const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+        return (h ? h+':' : '') + String(m).padStart(h?2:1,'0') + ':' + String(sec).padStart(2,'0');
+    }
+    function err(msg)  { status.innerHTML = `<span style="color:red;">${msg}</span>`; }
+    function note(msg) { status.innerHTML = `<span style="color:#666;">${msg}</span>`; }
+
+    // --- Progress bar --------------------------------------------------------
+    // The client invents a job id, sends it with the request, and polls the
+    // server for how far that job has got.
+
+    let pollTimer = null;
+
+    function newJob() {
+        return 'j' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    function showProgress(job) {
+        $('progressWrap').style.display = 'block';
+        $('progressFill').style.width = '0%';
+        $('progressBar').classList.add('indeterminate');
+        $('progressStage').textContent = 'Starting…';
+        $('progressDetail').textContent = '';
+        clearInterval(pollTimer);
+        pollTimer = setInterval(async () => {
+            try {
+                const r = await fetch(`/progress/${job}`);
+                const p = await r.json();
+                const pct = typeof p.percent === 'number' ? p.percent : 0;
+                // A percentage only means something once the server knows the
+                // total size; until then keep the bar moving rather than lying.
+                const known = pct > 0;
+                $('progressBar').classList.toggle('indeterminate', !known);
+                if (known) $('progressFill').style.width = Math.min(pct, 100) + '%';
+                $('progressStage').textContent = (p.stage || 'Working') + (known ? ` ${pct}%` : '…');
+                const bits = [];
+                if (p.total_mb) bits.push(`${p.done_mb || 0} / ${p.total_mb} MB`);
+                if (p.speed_mbps) bits.push(`${p.speed_mbps} MB/s`);
+                $('progressDetail').textContent = bits.join('  •  ');
+            } catch (e) { /* a dropped poll is not worth reporting */ }
+        }, 500);
+    }
+
+    function hideProgress() {
+        clearInterval(pollTimer); pollTimer = null;
+        $('progressWrap').style.display = 'none';
+        $('progressBar').classList.remove('indeterminate');
+    }
+
+    // --- Trim controls -----------------------------------------------------
+
+    function selStart() { return parseFloat(startRange.value); }
+    function selEnd()   { return parseFloat(endRange.value); }
+    function trimMax()  { return parseFloat(endRange.max) || 1; }
+
+    function refreshTrim() {
+        // Keep at least a 1s window so the handles can never cross.
+        if (selEnd() - selStart() < 1) {
+            if (document.activeElement === startRange) {
+                startRange.value = Math.max(0, selEnd() - 1);
+            } else {
+                endRange.value = Math.min(trimMax(), selStart() + 1);
+            }
+        }
+        const max = trimMax();
+        $('fill').style.left  = (selStart() / max * 100) + '%';
+        $('fill').style.width = ((selEnd() - selStart()) / max * 100) + '%';
+        // Don't overwrite a box while it's being typed into.
+        if (document.activeElement !== startInput) startInput.value = fmtDuration(selStart());
+        if (document.activeElement !== endInput)   endInput.value   = fmtDuration(selEnd());
+        startInput.classList.remove('bad'); endInput.classList.remove('bad');
+        $('selLabel').textContent = fmtDuration(selEnd() - selStart());
+        $('totalLabel').textContent = fmtDuration(max);
+    }
+
+    function setupTrim(duration) {
+        const max = Math.max(1, duration);
+        [startRange, endRange].forEach(r => { r.min = 0; r.max = max; r.step = 0.1; });
+        startRange.value = 0; endRange.value = max;
+        refreshTrim();
+    }
+
+    // The player only accepts seeks once it has metadata; before that a seek is
+    // silently dropped, so wait for it rather than pretending it worked.
+    let playable = false;   // false once we know this browser can't decode it
+    let failReason = '';
+
+    function ready() { return player.readyState >= 1 && isFinite(player.duration); }
+    function mediaErr() {
+        const codes = { 1: 'aborted', 2: 'network', 3: 'decode', 4: 'format not supported' };
+        return player.error ? (codes[player.error.code] || 'code ' + player.error.code) : 'timed out';
+    }
+    function whenReady(timeoutMs = 20000) {
+        if (ready()) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const ok  = () => { cleanup(); resolve(); };
+            const bad = () => { cleanup(); reject(new Error(mediaErr())); };
+            const timer = setTimeout(bad, timeoutMs);
+            const cleanup = () => {
+                clearTimeout(timer);
+                player.removeEventListener('loadedmetadata', ok);
+                player.removeEventListener('error', bad);
+            };
+            player.addEventListener('loadedmetadata', ok);
+            player.addEventListener('error', bad);
+            if (player.readyState === 0) player.load();
+        });
+    }
+
+    function seekTo(t) {
+        if (!playable) return Promise.resolve();   // no player: trimming still works
+        return whenReady().then(() => new Promise(resolve => {
+            const target = Math.min(Math.max(t, 0), player.duration - 0.05);
+            if (Math.abs(player.currentTime - target) < 0.05) return resolve();
+            player.addEventListener('seeked', resolve, { once: true });
+            player.currentTime = target;
+        }));
+    }
+
+    startRange.addEventListener('input', () => { refreshTrim(); seekTo(selStart()); });
+    endRange.addEventListener('input', refreshTrim);
+
+    // Typed times: "90", "1:30" and "1:02:03" all work.
+    function parseTime(text) {
+        const s = (text || '').trim();
+        if (!/^\d+(:[0-5]?\d){0,2}(\.\d+)?$/.test(s)) return null;
+        return s.split(':').reduce((total, part) => total * 60 + parseFloat(part), 0);
+    }
+
+    function commitBox(which) {
+        const box = which === 'start' ? startInput : endInput;
+        const secs = parseTime(box.value);
+        if (secs === null) {
+            // Put the real value back so the box never disagrees with the cut.
+            box.value = fmtDuration(which === 'start' ? selStart() : selEnd());
+            box.classList.add('bad');
+            setTimeout(() => box.classList.remove('bad'), 1200);
+            return;
+        }
+        if (which === 'start') {
+            startRange.value = Math.max(0, Math.min(secs, selEnd() - 1));
+        } else {
+            endRange.value = Math.min(trimMax(), Math.max(secs, selStart() + 1));
+        }
+        box.blur();                      // so refreshTrim can show the clamped value
+        refreshTrim();
+        if (which === 'start') seekTo(selStart());
+    }
+
+    [['start', startInput], ['end', endInput]].forEach(([which, box]) => {
+        box.addEventListener('change', () => commitBox(which));
+        box.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commitBox(which); }
+        });
+        box.addEventListener('focus', () => box.select());
+    });
+
+    // Clicking the bare track scrubs the preview without moving the handles.
+    $('dual').addEventListener('pointerdown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        const r = $('dual').getBoundingClientRect();
+        seekTo((e.clientX - r.left) / r.width * trimMax());
+    });
+
+    $('setStartBtn').onclick = () => {
+        startRange.value = Math.max(0, Math.min(player.currentTime || 0, selEnd() - 1));
+        refreshTrim();
+    };
+    $('setEndBtn').onclick = () => {
+        endRange.value = Math.min(trimMax(), Math.max(player.currentTime || 0, selStart() + 1));
+        refreshTrim();
+    };
+    $('resetSelBtn').onclick = () => { setupTrim(prepared ? prepared.duration : 0); };
+
+    $('playSelBtn').onclick = async () => {
+        if (!playable) {
+            err(`This browser can't play the preview (${failReason || 'unknown reason'}) — ` +
+                `your start/end still work, so go ahead and download. ` +
+                `Opening http://127.0.0.1:5000 in Chrome or Edge lets you hear it.`);
+            return;
+        }
+        try {
+            await seekTo(selStart());
+        } catch (e) {
+            err(`The preview audio could not be played (${e.message}).`);
+            return;
+        }
+        stopAt = selEnd();
+        try { await player.play(); } catch (e) { stopAt = null; }
+    };
+
+    // Stop at the end of the selection. timeupdate only fires ~4x a second, so
+    // a short timer keeps the cut-off tight.
+    let watchdog = null;
+    function checkStop() {
+        if (stopAt !== null && player.currentTime >= stopAt) { player.pause(); stopAt = null; }
+    }
+    player.addEventListener('timeupdate', () => {
+        checkStop();
+        const ph = $('playhead');
+        if (isFinite(player.duration) && player.duration > 0) {
+            ph.style.display = 'block';
+            ph.style.left = (player.currentTime / trimMax() * 100) + '%';
+        }
+    });
+    player.addEventListener('play',  () => { watchdog = setInterval(checkStop, 80); });
+    player.addEventListener('pause', () => { clearInterval(watchdog); stopAt = null; });
+
+    // --- Step 1: read the video, then fetch its audio for preview ----------
+
+    fetchBtn.onclick = async () => {
+        const code = codeInput.value.trim(), url = urlInput.value.trim();
+        if (!code) { err('Enter your access code.'); return; }
+        if (!url)  { err('Paste a YouTube link.'); return; }
+
+        prepared = null;
+        chooser.classList.add('hidden'); trimmer.classList.add('hidden');
+        preview.style.display = 'none';
+        loader.style.display = 'block'; fetchBtn.disabled = true;
+        note('Reading the video…');
+
+        const job = newJob();
+        const body = new FormData();
+        body.append('code', code); body.append('url', url); body.append('job', job);
+        try {
+            const r = await fetch('/formats', { method: 'POST', body });
+            const d = await r.json();
+            if (d.status !== 'success') { err(d.message); return; }
+
+            $('thumb').src = d.thumbnail || '';
+            $('thumb').style.display = d.thumbnail ? 'block' : 'none';
+            $('vTitle').textContent = d.title;
+            $('vMeta').textContent =
+                [d.uploader, fmtDuration(d.duration), d.best_abr ? `source ~${d.best_abr} kbps` : '']
+                .filter(Boolean).join('  •  ');
+            preview.style.display = 'block';
+
+            qualitySelect.innerHTML = '';
+            d.options.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.id; opt.textContent = o.label;
+                if (o.id === 'mp3_192') opt.selected = true;
+                qualitySelect.appendChild(opt);
+            });
+
+            // Fetch a small low-quality copy just for previewing/trimming.
+            // The real quality is only fetched once you actually download.
+            note('Fetching a low-quality preview so you can listen and trim…');
+            showProgress(job);
+            const p = await fetch('/prepare', { method: 'POST', body });
+            hideProgress();
+            const pd = await p.json();
+            if (pd.status !== 'success') { err(pd.message); return; }
+
+            prepared = { duration: pd.duration || d.duration || 0 };
+            setupTrim(prepared.duration);
+            $('playhead').style.display = 'none';
+            trimmer.classList.remove('hidden');
+            chooser.classList.remove('hidden');
+
+            // Lock the controls until the player really has the audio, so a
+            // seek can't be issued into a player that would silently ignore it.
+            playable = false;
+            trimmer.classList.add('busy'); downloadBtn.disabled = true;
+            note('Loading the preview player…');
+            player.src = pd.stream_url;
+            try {
+                try {
+                    await whenReady();
+                } catch (first) {
+                    note(`Preview needs loading a different way (${first.message})…`);
+                    await loadViaBlob(player, pd.stream_url, whenReady);
+                }
+                playable = true;
+                // Trust the real decoded length now the browser knows it.
+                if (isFinite(player.duration) && player.duration > 0) {
+                    prepared.duration = player.duration;
+                    setupTrim(player.duration);
+                }
+                note('Ready — play it, set the start and end, then download.');
+            } catch (e) {
+                // Playback failing doesn't stop you trimming: the length came
+                // from the server, so the handles and the cut still work.
+                failReason = e.message + (cspHits.length ? `; BLOCKED BY POLICY: ${cspHits.join(' | ')}` : '');
+                err(`Preview playback isn't available here (${failReason}) — ` +
+                    `you can still set the start and end and download.`);
+            } finally {
+                trimmer.classList.remove('busy'); downloadBtn.disabled = false;
+            }
+        } catch (e) {
+            err('Connection error! Is the server running?');
+        } finally {
+            loader.style.display = 'none'; hideProgress(); fetchBtn.disabled = false;
+        }
+    };
+
+    // --- YouTube sign-in (cookies) -------------------------------------------
+    // The server needs a signed-in YouTube session because YouTube blocks
+    // unrecognised servers. The file never leaves this page except to be stored
+    // server-side, and the server only ever reports a count and expiry back.
+
+    const cookieState = $('cookieState'), dropZone = $('dropZone');
+
+    function showCookieState(d, assumeOk) {
+        // The proxy is what makes a server-hosted instance work at all, so say
+        // whether one is in use — without ever showing its credentials.
+        if (d.proxy !== undefined) {
+            $('proxyState').textContent = d.proxy
+                ? `Proxy active: ${d.proxy}`
+                : 'No proxy — YouTube blocks most servers without one.';
+            $('proxyState').classList.toggle('ok', !!d.proxy);
+        }
+        cookieState.textContent = d.message || '';
+        const ok = d.loaded !== undefined ? d.loaded : assumeOk;
+        cookieState.classList.toggle('ok', !!ok);
+        cookieState.classList.toggle('warn', d.status === 'error' || (d.loaded === false && !!d.message));
+    }
+
+    async function cookieCall(fields, busyText) {
+        const code = codeInput.value.trim();
+        if (!code) { showCookieState({ status: 'error', message: 'Enter your access code first.' }); return; }
+        if (busyText) cookieState.textContent = busyText;
+        const body = new FormData();
+        body.append('code', code);
+        Object.entries(fields).forEach(([k, v]) => body.append(k, v));
+        try {
+            const r = await fetch('/cookies', { method: 'POST', body });
+            const d = await r.json();
+            showCookieState(d, d.status === 'success');
+            return d;
+        } catch (e) {
+            showCookieState({ status: 'error', message: 'Connection error — is the server running?' });
+        }
+    }
+
+    function saveCookieText(text) {
+        if (!/youtube/i.test(text)) {
+            showCookieState({ status: 'error',
+                message: "That file has no youtube.com cookies. Export for youtube.com in Netscape format." });
+            return;
+        }
+        cookieCall({ action: 'save', cookies: text }, 'Saving…');
+    }
+
+    function readCookieFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => saveCookieText(String(reader.result || ''));
+        reader.onerror = () => showCookieState({ status: 'error', message: 'Could not read that file.' });
+        reader.readAsText(file);
+    }
+
+    dropZone.onclick = () => $('cookieFile').click();
+    $('cookieFile').onchange = (e) => readCookieFile(e.target.files[0]);
+    ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, (e) => {
+        e.preventDefault(); dropZone.classList.add('over');
+    }));
+    ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, (e) => {
+        e.preventDefault(); dropZone.classList.remove('over');
+    }));
+    dropZone.addEventListener('drop', (e) => {
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) readCookieFile(f);
+    });
+
+    $('cookieTestBtn').onclick = () =>
+        cookieCall({ action: 'test' }, 'Asking YouTube…');
+    $('cookieClearBtn').onclick = () => {
+        if (confirm('Remove the saved YouTube sign-in from the server?')) {
+            cookieCall({ action: 'clear' }, 'Removing…');
+        }
+    };
+    // Only check once opened, so a visitor who never touches it costs nothing.
+    $('signin').addEventListener('toggle', function () {
+        if (this.open) cookieCall({ action: 'status' }, 'Checking…');
+    }, { once: false });
+
+    // --- Tabs ---------------------------------------------------------------
+
+    function showTab(which) {
+        const audio = which === 'audio';
+        $('panelAudio').classList.toggle('hidden', !audio);
+        $('panelVideo').classList.toggle('hidden', audio);
+        $('tabAudio').classList.toggle('active', audio);
+        $('tabVideo').classList.toggle('active', !audio);
+        status.innerHTML = ''; loader.style.display = 'none';
+        // Don't leave media playing behind a hidden tab.
+        if (!player.paused) player.pause();
+        if (!vidPlayer.paused) vidPlayer.pause();
+    }
+    $('tabAudio').onclick = () => showTab('audio');
+    $('tabVideo').onclick = () => showTab('video');
+
+    // --- Video tab -----------------------------------------------------------
+
+    const vidUrlInput = $('vidUrlInput'), vidFetchBtn = $('vidFetchBtn');
+    const vidDownloadBtn = $('vidDownloadBtn'), vidChooser = $('vidChooser');
+    const vidQualitySelect = $('vidQualitySelect');
+
+    // Ask the browser itself what it can decode, best first, and let the server
+    // build exactly that. Browsers differ a lot — some play MP3 happily but
+    // reject VP9/Opus or AAC — so guessing here just burns downloads.
+    function videoSupport() {
+        const v = document.createElement('video');
+        const can = (t) => { try { return v.canPlayType(t) || ''; } catch (e) { return ''; } };
+        const candidates = [
+            ['vp9_opus',   'video/webm; codecs="vp9, opus"'],
+            ['h264_aac',   'video/mp4; codecs="avc1.42E01E, mp4a.40.2"'],
+            ['h264_mp3',   'video/mp4; codecs="avc1.42E01E, mp3"'],
+            ['vp8_vorbis', 'video/webm; codecs="vp8, vorbis"'],
+        ];
+        const scored = candidates
+            .map(([key, type]) => ({ key, verdict: can(type) }))
+            .filter(x => x.verdict);                       // drop the flat "no"s
+        scored.sort((a, b) => (b.verdict === 'probably') - (a.verdict === 'probably'));
+        return {
+            order: scored.map(x => x.key),
+            report: candidates.map(([k, t]) => `${k}=${can(t) || 'no'}`).join(', '),
+        };
+    }
+
+    // Some embedded browsers (VS Code's viewer, webview hosts) block media with
+    // a Content-Security-Policy. That surfaces as "format not supported" even
+    // though the bytes fetch fine, so record the real cause when it happens.
+    const cspHits = [];
+    document.addEventListener('securitypolicyviolation', (e) => {
+        cspHits.push(`${e.violatedDirective} blocked ${String(e.blockedURI).slice(0, 60)}`);
+    });
+
+    // Last resort when a player refuses a URL it should accept: fetch the bytes
+    // ourselves (which we know works) and hand them over as a blob instead.
+    async function loadViaBlob(el, url, whenReadyFn) {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`server returned ${r.status}`);
+        const blob = await r.blob();
+        if (el.dataset.objurl) URL.revokeObjectURL(el.dataset.objurl);
+        const obj = URL.createObjectURL(blob);
+        el.dataset.objurl = obj;
+        el.src = obj;
+        await whenReadyFn();
+    }
+
+    // When a preview won't play, find out whether the file even arrived —
+    // a proxying browser can fail the fetch and look like a codec problem.
+    async function diagnose(url) {
+        try {
+            const r = await fetch(url, { headers: { Range: 'bytes=0-2047' } });
+            const buf = await r.arrayBuffer();
+            return `server said ${r.status} ${r.headers.get('content-type') || '?'}, ` +
+                   `${buf.byteLength} bytes arrived`;
+        } catch (e) {
+            return `could not fetch the preview at all (${e.message})`;
+        }
+    }
+
+    const vidPlayer = $('vidPlayer'), vidTrimmer = $('vidTrimmer');
+    const vidStartRange = $('vidStartRange'), vidEndRange = $('vidEndRange');
+    const vidStartInput = $('vidStartInput'), vidEndInput = $('vidEndInput');
+    let vidDuration = 0, vidPlayable = false, vidStopAt = null, vidWatchdog = null;
+    let vidFailReason = '';
+
+    function vStart() { return parseFloat(vidStartRange.value); }
+    function vEnd()   { return parseFloat(vidEndRange.value); }
+    function vMax()   { return parseFloat(vidEndRange.max) || 1; }
+
+    function vRefresh() {
+        if (vEnd() - vStart() < 1) {
+            if (document.activeElement === vidStartRange) {
+                vidStartRange.value = Math.max(0, vEnd() - 1);
+            } else {
+                vidEndRange.value = Math.min(vMax(), vStart() + 1);
+            }
+        }
+        const max = vMax();
+        $('vidFill').style.left  = (vStart() / max * 100) + '%';
+        $('vidFill').style.width = ((vEnd() - vStart()) / max * 100) + '%';
+        if (document.activeElement !== vidStartInput) vidStartInput.value = fmtDuration(vStart());
+        if (document.activeElement !== vidEndInput)   vidEndInput.value   = fmtDuration(vEnd());
+        vidStartInput.classList.remove('bad'); vidEndInput.classList.remove('bad');
+        $('vidSelLabel').textContent = fmtDuration(vEnd() - vStart());
+        $('vidTotalLabel').textContent = fmtDuration(max);
+    }
+
+    function vSetup(duration) {
+        const max = Math.max(1, duration);
+        [vidStartRange, vidEndRange].forEach(r => { r.min = 0; r.max = max; r.step = 0.1; });
+        vidStartRange.value = 0; vidEndRange.value = max;
+        vRefresh();
+    }
+
+    function vSeek(t) {
+        if (!vidPlayable || !isFinite(vidPlayer.duration)) return Promise.resolve();
+        return new Promise(resolve => {
+            const target = Math.min(Math.max(t, 0), vidPlayer.duration - 0.05);
+            if (Math.abs(vidPlayer.currentTime - target) < 0.05) return resolve();
+            vidPlayer.addEventListener('seeked', resolve, { once: true });
+            vidPlayer.currentTime = target;
+        });
+    }
+
+    vidStartRange.addEventListener('input', () => { vRefresh(); vSeek(vStart()); });
+    vidEndRange.addEventListener('input', vRefresh);
+
+    $('vidDual').addEventListener('pointerdown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        const r = $('vidDual').getBoundingClientRect();
+        vSeek((e.clientX - r.left) / r.width * vMax());
+    });
+
+    function vCommitBox(which) {
+        const box = which === 'start' ? vidStartInput : vidEndInput;
+        const secs = parseTime(box.value);
+        if (secs === null) {
+            box.value = fmtDuration(which === 'start' ? vStart() : vEnd());
+            box.classList.add('bad');
+            setTimeout(() => box.classList.remove('bad'), 1200);
+            return;
+        }
+        if (which === 'start') {
+            vidStartRange.value = Math.max(0, Math.min(secs, vEnd() - 1));
+        } else {
+            vidEndRange.value = Math.min(vMax(), Math.max(secs, vStart() + 1));
+        }
+        box.blur(); vRefresh();
+        if (which === 'start') vSeek(vStart());
+    }
+    [['start', vidStartInput], ['end', vidEndInput]].forEach(([which, box]) => {
+        box.addEventListener('change', () => vCommitBox(which));
+        box.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); vCommitBox(which); }
+        });
+        box.addEventListener('focus', () => box.select());
+    });
+
+    $('vidSetStartBtn').onclick = () => {
+        vidStartRange.value = Math.max(0, Math.min(vidPlayer.currentTime || 0, vEnd() - 1));
+        vRefresh();
+    };
+    $('vidSetEndBtn').onclick = () => {
+        vidEndRange.value = Math.min(vMax(), Math.max(vidPlayer.currentTime || 0, vStart() + 1));
+        vRefresh();
+    };
+    $('vidResetSelBtn').onclick = () => vSetup(vidDuration);
+
+    $('vidPlaySelBtn').onclick = async () => {
+        if (!vidPlayable) {
+            err(`This browser can't play the preview — ${vidFailReason || 'unknown reason'}. ` +
+                `Your start/end still work, so go ahead and download. ` +
+                `Opening http://127.0.0.1:5000 in Chrome or Edge shows the preview.`);
+            return;
+        }
+        await vSeek(vStart());
+        vidStopAt = vEnd();
+        try { await vidPlayer.play(); } catch (e) { vidStopAt = null; }
+    };
+
+    function vCheckStop() {
+        if (vidStopAt !== null && vidPlayer.currentTime >= vidStopAt) {
+            vidPlayer.pause(); vidStopAt = null;
+        }
+    }
+    vidPlayer.addEventListener('timeupdate', () => {
+        vCheckStop();
+        const ph = $('vidPlayhead');
+        if (isFinite(vidPlayer.duration) && vidPlayer.duration > 0) {
+            ph.style.display = 'block';
+            ph.style.left = (vidPlayer.currentTime / vMax() * 100) + '%';
+        }
+    });
+    vidPlayer.addEventListener('play',  () => { vidWatchdog = setInterval(vCheckStop, 80); });
+    vidPlayer.addEventListener('pause', () => { clearInterval(vidWatchdog); vidStopAt = null; });
+
+    function vWhenReady(timeoutMs = 30000) {
+        if (vidPlayer.readyState >= 1 && isFinite(vidPlayer.duration)) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const codes = { 1: 'aborted', 2: 'network', 3: 'decode', 4: 'format not supported' };
+            const ok  = () => { cleanup(); resolve(); };
+            const bad = () => {
+                cleanup();
+                reject(new Error(vidPlayer.error ? (codes[vidPlayer.error.code] || 'error') : 'timed out'));
+            };
+            const timer = setTimeout(bad, timeoutMs);
+            const cleanup = () => {
+                clearTimeout(timer);
+                vidPlayer.removeEventListener('loadedmetadata', ok);
+                vidPlayer.removeEventListener('error', bad);
+            };
+            vidPlayer.addEventListener('loadedmetadata', ok);
+            vidPlayer.addEventListener('error', bad);
+            if (vidPlayer.readyState === 0) vidPlayer.load();
+        });
+    }
+
+    vidFetchBtn.onclick = async () => {
+        const code = codeInput.value.trim(), url = vidUrlInput.value.trim();
+        if (!code) { err('Enter your access code.'); return; }
+        if (!url)  { err('Paste a YouTube link.'); return; }
+
+        vidChooser.classList.add('hidden'); vidTrimmer.classList.add('hidden');
+        $('vidPreview').style.display = 'none';
+        loader.style.display = 'block'; vidFetchBtn.disabled = true;
+        note('Reading the video…');
+
+        const job = newJob();
+        const body = new FormData();
+        body.append('code', code); body.append('url', url); body.append('job', job);
+        try {
+            const r = await fetch('/video-formats', { method: 'POST', body });
+            const d = await r.json();
+            if (d.status !== 'success') { err(d.message); return; }
+
+            $('vidThumb').src = d.thumbnail || '';
+            $('vidThumb').style.display = d.thumbnail ? 'block' : 'none';
+            $('vidTitle').textContent = d.title;
+            $('vidMeta').textContent =
+                [d.uploader, fmtDuration(d.duration), d.best_height ? `up to ${d.best_height}p` : '']
+                .filter(Boolean).join('  •  ');
+            $('vidPreview').style.display = 'block';
+
+            vidQualitySelect.innerHTML = '';
+            d.options.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.id; opt.textContent = o.label;
+                if (o.id === '1080') opt.selected = true;
+                vidQualitySelect.appendChild(opt);
+            });
+            vidChooser.classList.remove('hidden');
+
+            // Pull a small 360p copy so the cut points can be picked by eye.
+            const sup = videoSupport();
+            if (!sup.order.length) {
+                // Nothing we can build would play here — don't spend a download
+                // on a preview that can't be shown. Trimming still works.
+                vidDuration = d.duration || 0;
+                vSetup(vidDuration);
+                vidTrimmer.classList.remove('hidden');
+                vidPlayable = false;
+                vidFailReason = `this browser reports it can't play any video format (${sup.report})`;
+                err(`No preview here — ${vidFailReason}. Set the start and end by typing ` +
+                    `times, then download. Chrome or Edge will show the preview.`);
+                return;
+            }
+            note('Fetching a low-resolution preview so you can pick the start and end…');
+            body.append('support', sup.order.join(','));
+            showProgress(job);
+            const p = await fetch('/video-prepare', { method: 'POST', body });
+            hideProgress();
+            const pd = await p.json();
+            if (pd.status !== 'success') { err(pd.message); return; }
+
+            vidDuration = pd.duration || d.duration || 0;
+            vSetup(vidDuration);
+            $('vidPlayhead').style.display = 'none';
+            vidTrimmer.classList.remove('hidden');
+
+            vidPlayable = false;
+            vidTrimmer.classList.add('busy'); vidDownloadBtn.disabled = true;
+            note(`Loading the preview (${pd.size_mb} MB)…`);
+            vidPlayer.src = pd.stream_url;
+            try {
+                try {
+                    await vWhenReady();
+                } catch (first) {
+                    // The player refused a URL we can fetch — usually a media
+                    // policy block. Feed it the bytes directly instead.
+                    note(`Preview needs loading a different way (${first.message})…`);
+                    await loadViaBlob(vidPlayer, pd.stream_url, vWhenReady);
+                }
+                vidPlayable = true;
+                if (isFinite(vidPlayer.duration) && vidPlayer.duration > 0) {
+                    vidDuration = vidPlayer.duration;
+                    vSetup(vidPlayer.duration);
+                }
+                note('Ready — set the start and end, pick a resolution, then download.');
+            } catch (e2) {
+                vidFailReason = e2.message;
+                const detail = await diagnose(pd.stream_url);
+                vidFailReason = `${e2.message}; served ${pd.kind || '?'}; ${detail}` +
+                                (cspHits.length ? `; BLOCKED BY POLICY: ${cspHits.join(' | ')}` : '') +
+                                `; browser: ${sup.report}`;
+                err(`Preview playback isn't available here — ${vidFailReason}. ` +
+                    `Your start/end still work, so go ahead and download.`);
+            } finally {
+                vidTrimmer.classList.remove('busy'); vidDownloadBtn.disabled = false;
+            }
+        } catch (e) {
+            err('Connection error! Is the server running?');
+        } finally {
+            loader.style.display = 'none'; hideProgress(); vidFetchBtn.disabled = false;
+        }
+    };
+
+    vidDownloadBtn.onclick = async () => {
+        const code = codeInput.value.trim(), url = vidUrlInput.value.trim();
+        loader.style.display = 'block';
+        vidDownloadBtn.disabled = true; vidFetchBtn.disabled = true;
+
+        const start = vStart(), end = vEnd();
+        const trimmed = start > 0.1 || end < vidDuration - 0.1;
+
+        const started = Date.now();
+        const tick = setInterval(() => {
+            const secs = Math.round((Date.now() - started) / 1000);
+            note(`Working… ${secs}s<br>Fetching the video, then cutting — keep this tab open.`);
+        }, 1000);
+
+        const job = newJob();
+        showProgress(job);
+        const body = new FormData();
+        body.append('code', code); body.append('url', url); body.append('job', job);
+        body.append('quality', vidQualitySelect.value);
+        body.append('start', start.toFixed(3));
+        body.append('end', end.toFixed(3));
+        body.append('trimmed', trimmed ? '1' : '0');
+        try {
+            const r = await fetch('/video-download', { method: 'POST', body });
+            const d = await r.json();
+            if (d.status === 'success') {
+                const bits = [d.height ? d.height + 'p' : '', fmtDuration(end - start),
+                              d.size_mb ? d.size_mb + ' MB' : ''].filter(Boolean).join(', ');
+                status.innerHTML = `<span style="color:green;">Done${bits ? ' — ' + bits : ''}.</span><br>` +
+                    `<a href="/get-file/${d.file_path}" class="success-link" download>Click here to save the video</a>`;
+            } else {
+                err(d.message);
+            }
+        } catch (e) {
+            err('Connection error! Is the server running?');
+        } finally {
+            clearInterval(tick); loader.style.display = 'none'; hideProgress();
+            vidDownloadBtn.disabled = false; vidFetchBtn.disabled = false;
+        }
+    };
+
+    // --- Step 2: cut the selection and hand back the file ------------------
+
+    downloadBtn.onclick = async () => {
+        if (!prepared) { err('Get a preview first.'); return; }
+
+        const start = selStart(), end = selEnd();
+        const trimmed = start > 0.1 || end < prepared.duration - 0.1;
+
+        loader.style.display = 'block';
+        downloadBtn.disabled = true; fetchBtn.disabled = true;
+
+        const started = Date.now();
+        const tick = setInterval(() => {
+            const secs = Math.round((Date.now() - started) / 1000);
+            note(`Working… ${secs}s<br>Fetching the audio, then converting — keep this tab open.`);
+        }, 1000);
+
+        const job = newJob();
+        showProgress(job);
+        const body = new FormData();
+        body.append('code', codeInput.value.trim());
+        body.append('job', job);
+        body.append('url', urlInput.value.trim());
+        body.append('format', qualitySelect.value);
+        body.append('start', start.toFixed(3));
+        body.append('end', end.toFixed(3));
+        body.append('trimmed', trimmed ? '1' : '0');
+        try {
+            const r = await fetch('/cut', { method: 'POST', body });
+            const d = await r.json();
+            if (d.status === 'success') {
+                status.innerHTML =
+                    `<span style="color:green;">Done — ${fmtDuration(end - start)} of audio.</span><br>` +
+                    `<a href="/get-file/${d.file_path}" class="success-link" download>Click here to save the file</a>`;
+            } else {
+                err(d.message);
+            }
+        } catch (e) {
+            err('Connection error! Is the server running?');
+        } finally {
+            clearInterval(tick); loader.style.display = 'none'; hideProgress();
+            downloadBtn.disabled = false; fetchBtn.disabled = false;
+        }
+    };
+</script>
+
+</body>
+</html>

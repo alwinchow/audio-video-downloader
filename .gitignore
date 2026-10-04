@@ -1,0 +1,28 @@
+# Downloaded/generated audio & video files — never commit user content
+downloads/*
+!downloads/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local secrets (ACCESS_CODE is read from env, but guard against a stray .env)
+.env
+
+# YouTube session cookies — these are full account credentials, never commit
+cookies.txt
+*cookies*.txt
+
+# Editor/OS cruft
+.vscode/
+.DS_Store
+Thumbs.db
+
+# PyInstaller build output and desktop-only tooling (not part of the server
+# deploy — the .exe is built locally, not committed)
+build/
+dist/
+*.spec.bak
+__pycache__/
