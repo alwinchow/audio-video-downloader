@@ -1,6 +1,6 @@
 # audio-video-downloader
 
-A small self-hosted web app for pulling audio or video out of YouTube links,
+A self-hosted web app for pulling audio or video out of YouTube links,
 with a built-in preview player so you can trim to exactly the part you want
 before downloading.
 
