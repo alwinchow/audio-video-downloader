@@ -6,11 +6,18 @@ This is the entry point PyInstaller packages into the .exe. `server.py` stays
 completely unaware of this — it only reacts to `sys.frozen`, set automatically
 by PyInstaller, to find its writable data directory and bundled ffmpeg.
 """
+import os
 import socket
 import threading
 import webbrowser
 
 import webview
+
+# Off by default in pywebview — without it, clicking a download link inside
+# the app window does nothing at all, with no error shown anywhere.
+webview.settings['ALLOW_DOWNLOADS'] = True
+if os.environ.get("YTDL_DEBUG") == "1":
+    webview.settings['REMOTE_DEBUGGING_PORT'] = 9333
 
 import server as srv
 
@@ -46,7 +53,7 @@ def main():
     try:
         webview.create_window("Audio & Video Downloader", url,
                               width=480, height=900, min_size=(380, 600))
-        webview.start()
+        webview.start(debug=os.environ.get("YTDL_DEBUG") == "1")
     except Exception:
         # No WebView2 runtime, or pywebview couldn't start for some other
         # reason — fall back to the system browser rather than the app
